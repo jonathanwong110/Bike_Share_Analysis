@@ -1,0 +1,193 @@
+---
+title: "Bike Share Analysis"
+author: "Jonathan Wong"
+date: "2024-10-12"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, load-packages, include=FALSE, show_col_types = FALSE}
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+library(magrittr)
+library(knitr)
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r , echo=FALSE, results='hide', show_col_types = FALSE, message=FALSE, warnings=FALSE}
+q1_2019 <- read_csv("Divvy_Trips_2019_Q1.csv")
+q1_2020 <- read_csv("Divvy_Trips_2020_Q1.csv")
+
+(q1_2019 <- rename(q1_2019
+                   ,ride_id = trip_id
+                   ,rideable_type = bikeid
+                   ,started_at = start_time
+                   ,ended_at = end_time
+                   ,start_station_name = from_station_name
+                   ,start_station_id = from_station_id
+                   ,end_station_name = to_station_name
+                   ,end_station_id = to_station_id
+                   ,member_casual = usertype
+))
+
+q1_2019 <-  mutate(q1_2019, ride_id = as.character(ride_id)
+                   ,rideable_type = as.character(rideable_type)) 
+
+all_trips <- bind_rows(q1_2019, q1_2020)
+
+all_trips <- all_trips %>%  
+  select(-c(start_lat, start_lng, end_lat, end_lng, birthyear, gender,  "tripduration"))
+
+all_trips <-  all_trips %>% 
+  mutate(member_casual = recode(member_casual
+                                ,"Subscriber" = "member"
+                                ,"Customer" = "casual"))
+
+all_trips$date <- as.Date(all_trips$started_at)
+all_trips$month <- format(as.Date(all_trips$date), "%m")
+all_trips$day <- format(as.Date(all_trips$date), "%d")
+all_trips$year <- format(as.Date(all_trips$date), "%Y")
+all_trips$day_of_week <- format(as.Date(all_trips$date), "%A")
+
+all_trips$ride_length <- difftime(all_trips$ended_at,all_trips$started_at)
+
+all_trips$ride_length <- as.numeric(as.character(all_trips$ride_length))
+
+all_trips_v2 <- all_trips[!(all_trips$start_station_name == "HQ QR" | all_trips$ride_length<0),]
+
+mean(all_trips_v2$ride_length)
+median(all_trips_v2$ride_length)
+max(all_trips_v2$ride_length)
+min(all_trips_v2$ride_length)
+
+summary(all_trips_v2$ride_length)
+
+```
+
+```{r, echo=FALSE}
+length_of_ride <- all_trips_v2$ride_length
+user_type <- all_trips_v2$member_casual
+```
+
+### Business Task: 
+
+1)	To maximize the number of annual memberships for the company’s future success
+2)	Compare casual riders vs. annual members in their historical bike trip data
+3)	How can Cyclistic use digital media to convert casual riders into annual members
+
+### Resources Used:  
+Amazon: [Trip Data](https://divvy-tripdata.s3.amazonaws.com/index.html)
+
+### Documentation of Cleaning/Manipulating Data:    
+
+![Combining Datasets](Code_Image_1.png)
+  
+<br/>  
+  
+![Data Clean Up](Code_Image_2.png)
+
+### Summary of Analysis:
+
+Based on my analysis, casual riders exhibited longer average, median, and maximum ride duration compared to annual members. Notably, casual ridership peaks on Thursdays and declines following the weekend. In contrast, while annual member engagement remains consistently lower, their average ride duration appears stable throughout the week. 
+
+In terms of overall ride volume, annual members significantly outnumber casual riders. The patterns of engagement for these two groups are inversely related; casual riders tend to peak during the weekends and diminish during weekdays, whereas annual members demonstrate a preference for weekday rides, often taking twice as many rides on those days compared to weekends.
+
+In summation, casual riders are taking longer rides with less overall rides often peaking on the weekends. For annual members, they exhibit shorter rides with more overall rides peaking on the weekdays. In terms of the casual riders’ behavior, they are inversely related with the annual members.
+
+
+
+### Visualizations/Key Findings:  
+  
+<br/>  
+  
+#### Average Ride Duration
+```{r, echo=FALSE}
+aggregate(length_of_ride ~ user_type, FUN = mean)
+```
+
+#### Median Ride Duration
+```{r, echo=FALSE}
+aggregate(length_of_ride ~ user_type, FUN = median)
+```
+
+#### Maximum Ride Duration
+```{r, echo=FALSE}
+aggregate(length_of_ride ~ user_type, FUN = max)
+```
+
+```{r, echo=FALSE, results="hide"}
+#Minimum
+aggregate(length_of_ride ~ user_type, FUN = min)
+```
+
+```{r, echo=FALSE, results='hide', message=FALSE, warnings=FALSE}
+aggregate(all_trips_v2$ride_length ~ all_trips_v2$member_casual + all_trips_v2$day_of_week, FUN = mean)
+
+all_trips_v2$day_of_week <- ordered(all_trips_v2$day_of_week, levels=c("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"))
+
+aggregate(all_trips_v2$ride_length ~ all_trips_v2$member_casual + all_trips_v2$day_of_week, FUN = mean)
+
+all_trips_v2 %>% 
+  mutate(weekday = wday(started_at, label = TRUE)) %>%  
+  group_by(member_casual, weekday) %>%  
+  summarise(number_of_rides = n()							 
+            ,average_duration = mean(ride_length)) %>% 		
+  arrange(member_casual, weekday)
+
+```
+  
+<br/>  
+  
+```{r, echo=FALSE, message=FALSE, warnings=FALSE}
+
+# Visualization for average duration
+all_trips_v2 %>% 
+  mutate(weekday = wday(started_at, label = TRUE)) %>% 
+  group_by(member_casual, weekday) %>% 
+  summarise(number_of_rides = n()
+            ,average_duration = mean(ride_length)) %>% 
+  arrange(member_casual, weekday)  %>% 
+  ggplot(aes(x = weekday, y = average_duration, fill = member_casual)) +
+  scale_fill_manual("legend", values = c("casual" = "#FF8000", "member" = "#0080FF")) +
+  geom_col(position = "dodge") +
+  labs(
+    y="Average Ride Duration", 
+    x="Weekday",
+    title="Average Ride Duration throughout the Week",
+    subtitle="Source: https://divvy-tripdata.s3.amazonaws.com/index.html",,
+    fill="User Type"
+    )
+
+# Visualization for number of rides by rider type
+all_trips_v2 %>% 
+  mutate(weekday = wday(started_at, label = TRUE)) %>% 
+  group_by(member_casual, weekday) %>% 
+  summarise(number_of_rides = n()
+            ,average_duration = mean(ride_length)) %>% 
+  arrange(member_casual, weekday)  %>% 
+  ggplot(aes(x = weekday, y = number_of_rides, fill = member_casual)) +
+  scale_fill_manual("legend", values = c("casual" = "#FF8000", "member" = "#0080FF")) +
+  ylim(0, 150000) + 
+  geom_col(position = "dodge") +
+  labs(
+    y="Number of Rides", 
+    x="Weekday",
+    title = "Annual vs Casual Ridership throughout the Week",
+    subtitle="Source: https://divvy-tripdata.s3.amazonaws.com/index.html",
+    fill="User Type"
+  )
+```
+
+### Recommendations:  
+  
+Based on my analysis, the data shows an inverse relationship in behavior between casual riders and annual members. I propose the following three recommendations:
+
+1.	Conduct Comprehensive Surveys: We should implement surveys targeting both casual riders and annual members to gain deeper insights into their motivations and preferences. Understanding the perspectives of both groups will enable us to bridge the existing gap and enhance our conversion rates from casual to annual membership.
+
+2.	Incentivize Increased Ride Frequency: We recommend adjusting our pricing model to encourage casual riders to engage in more frequent, shorter rides rather than extended single rides. Additionally, streamlining the initial sign-up process for annual membership will enhance convenience and accessibility.
+
+3.	Promote Weekday Riding: We should market bike riding at Cyclistic as a viable option for weekday transportation, rather than solely as a weekend activity. This can be achieved by emphasizing the practicality of biking for commuting and other weekday errands, thereby broadening the appeal of our services to casual riders.
+
+By implementing these strategies, we can effectively align our offerings with the needs of both casual and annual riders, ultimately driving membership growth and engagement.
