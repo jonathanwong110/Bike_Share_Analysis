@@ -3,8 +3,9 @@ title: "Bike Share Analysis"
 author: "Jonathan Wong"
 date: "2024-10-12"
 output:
-  pdf_document: default
+  word_document: default
   html_document: default
+  pdf_document: default
 ---
 
 ```{r setup, load-packages, include=FALSE, show_col_types = FALSE}
